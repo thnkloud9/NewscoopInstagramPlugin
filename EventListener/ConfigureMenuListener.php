@@ -1,12 +1,12 @@
 <?php
 /**
- * @package Newscoop\InstagramPluginBundle
+ * @package Newscoop\GoogleEventsPluginBundle
  * @author Mark Lewis <mark.lewis@sourcefabric.org>
  * @copyright 2014 Sourcefabric o.p.s.
  * @license http://www.gnu.org/licenses/gpl-3.0.txt
  */
 
-namespace Newscoop\InstagramPluginBundle\EventListener;
+namespace Newscoop\GoogleEventsPluginBundle\EventListener;
 
 use Newscoop\NewscoopBundle\Event\ConfigureMenuEvent;
 use Symfony\Component\Translation\Translator;
@@ -30,8 +30,8 @@ class ConfigureMenuListener
     {
         $menu = $event->getMenu();
         $menu[$this->translator->trans('Plugins')]->addChild(
-            'Instagram Plugin',
-            array('uri' => $event->getRouter()->generate('newscoop_instagramplugin_admin_index'))
+            'GoogleEvents Plugin',
+            array('uri' => $event->getRouter()->generate('newscoop_googleeventsplugin_admin_index'))
         );
     }
 }

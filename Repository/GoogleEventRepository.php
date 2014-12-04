@@ -1,29 +1,29 @@
 <?php
 
 /**
- * @package Newscoop\InstagramPluginBundle
+ * @package Newscoop\GoogleEventsPluginBundle
  * @author Mark Lewis <mark.lewis@sourcefabric.org>
  */
 
-namespace Newscoop\InstagramPluginBundle\Repository;
+namespace Newscoop\GoogleEventsPluginBundle\Repository;
 
 use Doctrine\ORM\EntityRepository;
-use Newscoop\InstagramPluginBundle\TemplateList\InstagramPhotoCriteria;
+use Newscoop\GoogleEventsPluginBundle\TemplateList\GoogleEventCriteria;
 use Newscoop\ListResult;
 
 /**
- * InstagramPhotoRepository
+ * GoogleEventRepository
  */
-class InstagramPhotoRepository extends EntityRepository
+class GoogleEventRepository extends EntityRepository
 {
     /**
      * Get list for given criteria
      *
-     * @param Newscoop\InstagramPluginBundle\TemplateList\InstagramPhotoCriteria $criteria
+     * @param Newscoop\GoogleEventsPluginBundle\TemplateList\GoogleEventCriteria $criteria
      *
      * @return Newscoop\ListResult
      */
-    public function getListByCriteria(InstagramPhotoCriteria $criteria, $showResults = true)
+    public function getListByCriteria(GoogleEventCriteria $criteria, $showResults = true)
     {
         $qb = $this->createQueryBuilder('a');
         $list = new ListResult();
@@ -39,26 +39,19 @@ class InstagramPhotoRepository extends EntityRepository
             }
         }
 
-        if ($criteria->instagramUserName !== null) {
-            $qb->andWhere('a.instagramUserName = :user')
-                ->setParameter('user', $criteria->user);
-        }
-
         if ($criteria->query) {
             $qb->andWhere($qb->expr()->orX(
-                "(a.tags LIKE :query)", 
-                "(a.instagramUserName LIKE :query)", 
-                "(a.caption LIKE :query)", 
-                "(a.locationName LIKE :query)"
+                "(a.description LIKE :query)", 
+                "(a.creatorEmail LIKE :query)", 
+                "(a.creatorDisplayName LIKE :query)", 
+                "(a.location LIKE :query)"
             ));
             $qb->setParameter('query', '%' . trim($criteria->query, '%') . '%');
         }
 
         foreach ($criteria->perametersOperators as $key => $operator) {
-            if ($key !== 'user') {
-                $qb->andWhere('a.'.$key.' '.$operator.' :'.$key)
-                    ->setParameter($key, $criteria->$key);
-            }
+            $qb->andWhere('a.'.$key.' '.$operator.' :'.$key)
+                ->setParameter($key, $criteria->$key);
         }
 
         $countQb = clone $qb;
@@ -91,7 +84,7 @@ class InstagramPhotoRepository extends EntityRepository
     }
 
     /**
-     * Get InstagramPhoto count for given criteria
+     * Get GoogleEvent count for given criteria
      *
      * @param  array $criteria
      * @return int
@@ -116,5 +109,22 @@ class InstagramPhotoRepository extends EntityRepository
         }
 
         return (int) $query->getSingleScalarResult();
+    }
+
+    /**
+     * Delete events with end times in the past
+     *
+     * @return boolean
+     */
+    public function deleteOldEvents()
+    {
+        $deleted = false;
+        $query = $this->getEntityManager()->createQueryBuilder()
+            ->delete($this->getEntityName(), 'e')
+            ->where('e.end < :now')
+            ->setParameter('now', new \DateTime('now'))
+            ->getQuery();
+        $deleted = $query->execute();
+        return $deleted;
     }
 }

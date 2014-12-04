@@ -6,30 +6,30 @@
  * @license http://www.gnu.org/licenses/gpl-3.0.txt
  */
 
-namespace Newscoop\InstagramPluginBundle\Controller;
+namespace Newscoop\GoogleEventsPluginBundle\Controller;
 
 use Symfony\Bundle\FrameworkBundle\Controller\Controller;
 use Sensio\Bundle\FrameworkExtraBundle\Configuration\Route;
 use Sensio\Bundle\FrameworkExtraBundle\Configuration\Template;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
-use Newscoop\InstagramPluginBundle\TemplateList\InstagramPhotoCriteria;
+use Newscoop\GoogleEventsPluginBundle\TemplateList\GoogleEventCriteria;
 
 /**
- * Route("/instagram")
+ * Route("/google-events")
  */
-class InstagramController extends Controller
+class GoogleEventsController extends Controller
 {
     /**
-     * @Route("/instagram/photosearch")
+     * @Route("/google-events/search")
      */
-    public function photoSearchAction(Request $request)
+    public function eventSearchAction(Request $request)
     {
         $em = $this->get('em');
         $cacheService = $this->get('newscoop.cache');
         $templatesService = $this->container->get('newscoop.templates.service');
-        $instagramService = $this->container->get('newscoop_instagram_plugin.instagram_service');
-        $criteria = new InstagramPhotoCriteria();
+        $googleEventsService = $this->container->get('newscoop_google_events_plugin.google_events_service');
+        $criteria = new GoogleEventCriteria();
         
         // params
         $search = $this->_getParam('search', $request);
@@ -43,30 +43,30 @@ class InstagramController extends Controller
         if ($offset) {
             $criteria->firstResult = $offset;
         }
-        $cacheKey = array('instagram_photos__'.md5(serialize($criteria)));
+        $cacheKey = array('google_events_events__'.md5(serialize($criteria)));
 
         if ($cacheService->contains($cacheKey)) {
             $responseArray = $cacheService->fetch($cacheKey);                                                                                               
         } else { 
-            $photos = $em->getRepository('Newscoop\InstagramPluginBundle\Entity\InstagramPhoto')->getListByCriteria($criteria);
-            $cacheService->save($cacheKey, $photos);                                                                                                 
+            $events = $em->getRepository('Newscoop\GoogleEventsPluginBundle\Entity\GoogleEvent')->getListByCriteria($criteria);
+            $cacheService->save($cacheKey, $events);                                                                                                 
         }
 
         $smarty = $templatesService->getSmarty();
         $templateDir = array_shift($smarty->getTemplateDir());
-        $templateFile = "_views/instagram_search_results.tpl";
+        $templateFile = "_views/google_events_search_results.tpl";
         $response = new Response();
         $response->headers->set('Content-Type', 'text/html');
 
-        // render _views/instagram_photo.tpl if it exists, if not render the plugin template instead
+        // render _views/google_events_event.tpl if it exists, if not render the plugin template instead
         if (!file_exists($templateDir . $templateFile)) {
-            $templateFile = __DIR__ . "/../Resources/views/Instagram/instagram_search_results.tpl";
+            $templateFile = __DIR__ . "/../Resources/views/GoogleEvents/google_events_search_results.tpl";
         }
 
         $next = ($offset + $criteria->maxResults);
         $prev = ($offset - $criteria->maxResults);
-        if ($next < count($photos)) { 
-            $nextPageUrl = $this->generateUrl('newscoop_instagramplugin_instagram_photosearch', array(
+        if ($next < count($events)) { 
+            $nextPageUrl = $this->generateUrl('newscoop_googleeventsplugin_googleevents_eventsearch', array(
                 'search' => $search,
                 'offset' => $next,
                 'perPage' => $perPage
@@ -76,7 +76,7 @@ class InstagramController extends Controller
         }
 
         if ($criteria->firstResult > 0) { 
-            $prevPageUrl = $this->generateUrl('newscoop_instagramplugin_instagram_photosearch', array(
+            $prevPageUrl = $this->generateUrl('newscoop_googleeventsplugin_googleevents_eventsearch', array(
                 'search' => $search,
                 'offset' => $prev,
                 'perPage' => $perPage
@@ -91,8 +91,8 @@ class InstagramController extends Controller
                 'searchTerm' => $search,
                 'offset' => $offset,
                 'perPage' => $perPage,
-                'instagramPhotos' => $photos, 
-                'instagramPhotoCount' => count($photos),
+                'events' => $events, 
+                'eventCount' => count($events),
                 'nextPageUrl' => $nextPageUrl,
                 'prevPageUrl' => $prevPageUrl
             )
@@ -102,50 +102,44 @@ class InstagramController extends Controller
     }
 
     /**
-     * @Route("/instagram/photolist")
+     * @Route("/google-events/events/{id}", defaults={"id" = 0})
      */
-    public function photoListAction(Request $request)
+    public function eventsAction($id, Request $request)
     {
-        // this is just an example page to show how to use the smarty {{ list_instagram_photo }} block
+        $googleEventsService = $this->container->getService('newscoop_google_events_plugin.google_events_service');
         $templatesService = $this->container->get('newscoop.templates.service');
         $smarty = $templatesService->getSmarty();
         $templateDir = array_shift($smarty->getTemplateDir());
-        $templateFile = __DIR__ . "/../Resources/views/Instagram/instagram_photo_list.tpl";
-        $response = new Response();
-        $response->headers->set('Content-Type', 'text/html');
-        $response->setContent($templatesService->fetchTemplate($templateFile));
-        return $response;
 
-    }
+        if ($id > 0) {
+            $event = $googleEventsService->getGoogleEventById($id);
+            $templateFile = "_views/google_event.tpl";
+            $response = new Response();
+            $response->headers->set('Content-Type', 'text/html');
+            // render _views/google_event.tpl if it exists, if not render the plugin template instead
+            if (!file_exists($templateDir . $templateFile)) {
+                $templateFile = __DIR__ . "/../Resources/views/GoogleEvents/google_event.tpl";
+            }
+            $response->setContent($templatesService->fetchTemplate(
+                $templateFile, 
+                array('event' => $event)
+            ));
+        } else {
+            $events = $googleEventsService->getAllGoogleEvents();
+            $templateFile = "_views/google_events.tpl";
+            $response = new Response();
+            $response->headers->set('Content-Type', 'text/html');
+            // render _views/google_event.tpl if it exists, if not render the plugin template instead
+            if (!file_exists($templateDir . $templateFile)) {
+                $templateFile = __DIR__ . "/../Resources/views/GoogleEvents/google_events.tpl";
+            }
+            $response->setContent($templatesService->fetchTemplate(
+                $templateFile, 
+                array('events' => $events)
+            ));
 
-    /**
-     * @Route("/instagram/photos/{id}")
-     */
-    public function photosAction($id, Request $request)
-    {
-        if (!$id) {
-            throw new NotFoundHttpException('You must provice an id!');
         }
 
-        $instagramService = $this->container->getService('newscoop_instagram_plugin.instagram_service');
-        $templatesService = $this->container->get('newscoop.templates.service');
-
-        $photo = $instagramService->getInstagramPhotoById($id);
-        $smarty = $templatesService->getSmarty();
-        $templateDir = array_shift($smarty->getTemplateDir());
-        $templateFile = "_views/instagram_photo.tpl";
-        $response = new Response();
-        $response->headers->set('Content-Type', 'text/html');
-
-        // render _views/instagram_photo.tpl if it exists, if not render the plugin template instead
-        if (!file_exists($templateDir . $templateFile)) {
-            $templateFile = __DIR__ . "/../Resources/views/Instagram/instagram_photo.tpl";
-        }
-
-        $response->setContent($templatesService->fetchTemplate(
-            $templateFile, 
-            array('instagramPhoto' => $photo)
-        ));
         return $response;
     }
 

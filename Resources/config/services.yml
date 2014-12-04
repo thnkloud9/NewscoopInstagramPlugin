@@ -1,19 +1,18 @@
 services:
-    newscoop_instagram_plugin.lifecyclesubscriber:
-        class: Newscoop\InstagramPluginBundle\EventListener\LifecycleSubscriber
+    newscoop_google_events_plugin.lifecyclesubscriber:
+        class: Newscoop\GoogleEventsPluginBundle\EventListener\LifecycleSubscriber
         arguments:
-            - @em
-            - @newscoop.scheduler
+            - @service_container
         tags:
             - { name: kernel.event_subscriber}
 
-    newscoop_instagram_plugin.instagram_service:
-        class: Newscoop\InstagramPluginBundle\Services\InstagramService
+    newscoop_google_events_plugin.google_events_service:
+        class: Newscoop\GoogleEventsPluginBundle\Services\GoogleEventsService
         arguments:
             - @service_container
 
-    newscoop_instagram_plugin.configure_menu_listener:
-        class: Newscoop\InstagramPluginBundle\EventListener\ConfigureMenuListener
+    newscoop_google_events_plugin.configure_menu_listener:
+        class: Newscoop\GoogleEventsPluginBundle\EventListener\ConfigureMenuListener
         tags:
           - { name: kernel.event_listener, event: newscoop_newscoop.menu_configure, method: onMenuConfigure }
         arguments:
