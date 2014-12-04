@@ -1,18 +1,18 @@
 <?php
 
 /**
- * @package Newscoop\GoogleEventsPluginBundle
+ * @package Newscoop\InstagramPluginBundle
  * @author Mark Lewis <mark.kewis@sourcefabric.org>
  */
 
-namespace Newscoop\GoogleEventsPluginBundle\TemplateList;
+namespace Newscoop\InstagramPluginBundle\TemplateList;
 
 use Newscoop\Criteria;
 
 /**
- * Available criteria for GoogleEvent
+ * Available criteria for InstagramPhoto
  */
-class GoogleEventCriteria extends Criteria
+class InstagramPhotoCriteria extends Criteria
 {
     /**
      * @var string
@@ -22,22 +22,22 @@ class GoogleEventCriteria extends Criteria
     /**
      * @var string
      */
-    public $status;
+    public $tags;
 
     /**
      * @var string
      */
-    public $description;
+    public $caption;
 
     /**
      * @var string
      */
-    public $location;
+    public $locationName;
 
     /**
      * @var string
      */
-    public $summary;
+    public $instagramUserName;
 
     /**
      * @var string

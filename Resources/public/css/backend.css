@@ -81,20 +81,3 @@ button.description-btn {
 .dynatable-processing span img {
   vertical-align: middle;
 }
-
-.admin-form-label {
-  width: 120px;
-  text-align: right;
-}
-
-.med-input {
-  width: 300px;
-}
-
-#calendar-list-container {
-  padding: 5px;
-}
-
-.calendar-item {
-  padding: 5px;
-}

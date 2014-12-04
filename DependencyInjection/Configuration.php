@@ -1,6 +1,6 @@
 <?php
 
-namespace Newscoop\GoogleEventsPluginBundle\DependencyInjection;
+namespace Newscoop\InstagramPluginBundle\DependencyInjection;
 
 use Symfony\Component\Config\Definition\Builder\TreeBuilder;
 use Symfony\Component\Config\Definition\ConfigurationInterface;
@@ -18,7 +18,7 @@ class Configuration implements ConfigurationInterface
     public function getConfigTreeBuilder()
     {
         $treeBuilder = new TreeBuilder();
-        $rootNode = $treeBuilder->root('newscoop_google_events_plugin');
+        $rootNode = $treeBuilder->root('newscoop_instagram_plugin');
 
         // Here you should define the parameters that are allowed to
         // configure your bundle. See the documentation linked above for

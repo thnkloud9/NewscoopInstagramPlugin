@@ -1,4 +1,4 @@
-newscoop_google_events_plugin:
-    resource: "@NewscoopGoogleEventsPluginBundle/Controller"
+newscoop_instagram_plugin:
+    resource: "@NewscoopInstagramPluginBundle/Controller"
     type:     annotation
     prefix:   /

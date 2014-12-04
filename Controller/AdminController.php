@@ -6,7 +6,7 @@
  * @license http://www.gnu.org/licenses/gpl-3.0.txt
  */
 
-namespace Newscoop\GoogleEventsPluginBundle\Controller;
+namespace Newscoop\InstagramPluginBundle\Controller;
 
 use Symfony\Bundle\FrameworkBundle\Controller\Controller;
 use Sensio\Bundle\FrameworkExtraBundle\Configuration\Route;
@@ -15,43 +15,29 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Security\Core\Exception\AccessDeniedException;
-use Newscoop\GoogleEventsPluginBundle\TemplateList\GoogleEventCriteria;
+use Newscoop\InstagramPluginBundle\TemplateList\InstagramPhotoCriteria;
 
 class AdminController extends Controller
 {
     /**
-     * @Route("/admin/google-events")
+     * @Route("/admin/instagram")
      * @Template()
      */
     public function indexAction(Request $request)
     {
         $em = $this->container->get('em');
-        $preferencesService = $this->container->get('system_preferences_service');
         $currentIngestJob = $this->getCurrentJob();
         $scheduleParts = array();
         preg_match('/^\*\/([0-9]+) .+/', $currentIngestJob->getSchedule(), $scheduleParts);
         $mins = $scheduleParts[1];
-        list($console, $command) = split(" ", $currentIngestJob->getCommand());
-        $deleteOld = $preferencesService->GoogleEventsDeleteOld;
-        $calendarList = $preferencesService->GoogleEventsCalendarList;
-        $apikey = $preferencesService->GoogleEventsApiKey;
-        $start = $preferencesService->GoogleEventsStart;
-        $end = $preferencesService->GoogleEventsEnd;
+        list($console, $command, $tag, $limit) = split(" ", $currentIngestJob->getCommand());
 
-        // settings update
         if ($request->isMethod('POST')) {
-            $newDeleteOld = $request->request->get('delete_old');
-            $newStart = $request->request->get('start');
-            $newEnd = $request->request->get('end');
+            $newTag = $request->request->get('tag');
+            $newLimit = $request->request->get('limit');
             $newMins = $request->request->get('mins');
-            $newApikey = $request->request->get('apikey');
-            $newCalendarId = $request->request->get('calendar_id');
             try {
-                $preferencesService->set('GoogleEventsApiKey', $newApikey);
-                $preferencesService->set('GoogleEventsDeleteOld', $newDeleteOld);
-                $preferencesService->set('GoogleEventsStart', $newStart);
-                $preferencesService->set('GoogleEventsEnd', $newEnd);
-                $newCommand = "$console $command $newStart $newEnd";
+                $newCommand = "$console $command $newTag $newLimit";
                 $newSchedule = "*/$newMins * * * *"; 
                 $currentIngestJob->setCommand($newCommand);
                 $currentIngestJob->setSchedule($newSchedule);
@@ -67,70 +53,59 @@ class AdminController extends Controller
         }
 
         return array(
-            'delete_old' => $deleteOld,
-            'start' => $start,
-            'end' => $end,
-            'mins' => $mins,
-            'apikey' => $apikey,
-            'calendar_list' => explode(',', $calendarList)
+            'tag' => $tag,
+            'limit' => $limit,
+            'mins' => $mins
         );
     }
 
     /**
-     * @Route("admin/google-events/add-calendar", options={"expose"=true})
-     */
-    public function addCalendarAction(Request $request)
-    {
-        $preferencesService = $this->container->get('system_preferences_service');
-        $calendarId = $request->request->get('calendar_id');
-        $calendarList = explode(",", $preferencesService->GoogleEventsCalendarList);
-        if (!in_array($calendarId, $calendarList)) {
-            array_push($calendarList, $calendarId);
-            $preferencesService->set('GoogleEventsCalendarList', implode(",",$calendarList));
-        }
-    
-        return new JsonResponse(array("status" => true, "message" => $calendarId.' added'));
-    }
-
-    /**
-     * @Route("admin/google-events/delete-calendar", options={"expose"=true})
-     */
-    public function deleteCalendarAction(Request $request)
-    {
-        $preferencesService = $this->container->get('system_preferences_service');
-        $calendarId = $request->request->get('calendar_id');
-        $calendarList = explode(",", $preferencesService->GoogleEventsCalendarList);
-        $index = array_search($calendarId, $calendarList);
-        unset($calendarList[$index]); 
-        $preferencesService->set('GoogleEventsCalendarList', implode(",",$calendarList));
-    
-        return new JsonResponse(array("status" => true, "message" => $calendarId.' deleted'));
-    }
-
-    /**
-     * @Route("admin/google-events/ingest", options={"expose"=true})
+     * @Route("admin/instagram/ingest", options={"expose"=true})
      */
     public function ingestAction(Request $request)
     {
-        $googleEventsService = $this->container->getService('newscoop_google_events_plugin.google_events_service');
-        $preferencesService = $this->container->get('system_preferences_service');
-        $calendarList = explode(',', $preferencesService->GoogleEventsCalendarList);
-        $start = ($request->request->get('start')) ? $request->request->get('start') : date('Y-m-d\T00:00:00\Z', strtotime("-1 month"));
-        $end = $request->request->get('end');
-        $eventsAdded = 0;
+        $instagramService = $this->container->getService('newscoop_instagram_plugin.instagram_service');
+        $config = $this->container->getParameter('instagram_bundle');
+        $baseurl = $config['baseurl'];
+        $clientId = $config['client_id'];
+        $tag = $request->request->get('tag');
+        $limit = $request->request->get('limit');
+        $photos = array();
+        $photosAdded = 0;
+        $url = $baseurl . "tags/" . $tag . "/media/recent?client_id=" . $clientId;
 
-        foreach ($calendarList as $calendarId) {
-            if (!empty($calendarId)) {
-                $added = $googleEventsService->ingestEvents($calendarId, $start, $end);
-                $eventsAdded += $added;
+        try {
+            $client = new \Buzz\Client\Curl();
+            $client->setTimeout(3600);
+            $browser = new \Buzz\Browser($client);
+            $response =  $browser->get($url);
+            $results = json_decode($response->getContent(), true);
+
+            // we must paginate through all the results
+            while (count($photos) < $limit) {
+                $photos = array_merge($photos, $results['data']); 
+                if ($results['pagination']['next_url']) {
+                    $nextUrl = $results['pagination']['next_url'];
+                    $response =  $browser->get($nextUrl);
+                    $results = json_decode($response->getContent(), true);
+                } else {
+                    // we aren't going to get $maxCount
+                    break;
+                }
             }
-        }
-        if ($eventsAdded) {
+
+            foreach ($photos as $photo) {
+                // check if we already have this photo
+                if (!$instagramService->exists($photo['id'])) {
+                    $instagramPhoto = $instagramService->saveInstagramPhoto($photo);
+                    $photosAdded++;
+                }
+            }
             $status = true;
-            $message = "Added " . $eventsAdded . " events";
-        } else {
+            $message = "Added " . $photosAdded . " photos";
+        } catch(\Exception $e) {
             $status = false;
-            $message = "Added " . $eventsAdded . " events";
+            $message = 'Error: ' . $e->getMessage();
         }
 
         return new JsonResponse(array("status" => $status, "message" => $message));
@@ -138,42 +113,41 @@ class AdminController extends Controller
 
 
     /**
-     * @Route("admin/google-events/load/", options={"expose"=true})
+     * @Route("admin/instagram/load/", options={"expose"=true})
      */
-    public function loadEventsAction(Request $request)
+    public function loadPhotosAction(Request $request)
     {   
         $em = $this->get('em');
         $cacheService = $this->get('newscoop.cache');
-        $googleEventsService = $this->container->get('newscoop_google_events_plugin.google_events_service');
+        $instagramService = $this->container->get('newscoop_instagram_plugin.instagram_service');
         $criteria = $this->processRequest($request);
-        $eventsCount = $googleEventsService->countBy(array('isActive' => true)); 
-        $eventsInactiveCount = $googleEventsService->countBy(array('isActive' => false));
+        $photosCount = $instagramService->countBy(array('isActive' => true)); 
+        $photosInactiveCount = $instagramService->countBy(array('isActive' => false));
      
-        $cacheKey = array('google_events__'.md5(serialize($criteria)), $eventsCount, $eventsInactiveCount);
+        $cacheKey = array('instagram_photos__'.md5(serialize($criteria)), $photosCount, $photosInactiveCount);
         if ($cacheService->contains($cacheKey)) {
             $responseArray = $cacheService->fetch($cacheKey);                                                                                               
         } else { 
-            $events = $em->getRepository('Newscoop\GoogleEventsPluginBundle\Entity\GoogleEvent')->getListByCriteria($criteria);                                         
+            $photos = $em->getRepository('Newscoop\InstagramPluginBundle\Entity\InstagramPhoto')->getListByCriteria($criteria);                                         
             
             $processed = array();
-            foreach ($events as $event) {
+            foreach ($photos as $photo) {
                 $processed[] = array(
-                    'id' => $event->getId(),
-                    'location' => $event->getLocation(),
-                    'htmlLink' => $event->getHtmlLink(),
-                    'description' => $event->getDescription(),
-                    'createdAt' => $event->getCreatedAt(),
-                    'start' => $event->getStart(),
-                    'end' => $event->getEnd(),
-                    'creatorEmail' => $event->getCreatorEmail(),
-                    'isActive' => $event->getIsActive()
+                    'id' => $photo->getId(),
+                    'instagramUserName' => $photo->getInstagramUserName(),
+                    'tags' => $photo->getTags(),
+                    'caption' => $photo->getCaption(),
+                    'thumbnailUrl' => $photo->getThumbnailUrl(),
+                    'locationName' => $photo->getLocationName(),
+                    'createdAt' => $photo->getCreatedAt(),
+                    'isActive' => $photo->getIsActive()
                 );                                                                                           
             }                                                                                                                                               
             
             $responseArray = array(
                 'records' => $processed,
-                'queryRecordCount' => $events->count,
-                'totalRecordCount'=> count($events->items)
+                'queryRecordCount' => $photos->count,
+                'totalRecordCount'=> count($photos->items)
             );                                                                                                                                              
             
             $cacheService->save($cacheKey, $responseArray);                                                                                                 
@@ -183,7 +157,7 @@ class AdminController extends Controller
     }
 
     /**
-     * Load current scheduled google-events ingest job
+     * Load current scheduled instagram ingest job
      *
      * @return Newscoop\Entity\CronJob
      */
@@ -191,7 +165,7 @@ class AdminController extends Controller
     {
         $em = $this->get('em');
         $schedulerService = $this->get('newscoop.scheduler');
-        $job = $em->getRepository('Newscoop\Entity\CronJob')->findOneByName("GoogleEvents plugin ingest events cron job");
+        $job = $em->getRepository('Newscoop\Entity\CronJob')->findOneByName("Instagram plugin ingest photos cron job");
         return $job;
     }
 
@@ -200,47 +174,49 @@ class AdminController extends Controller
      *
      * @param Request $request Request object
      *
-     * @return GoogleEventCriteria
+     * @return InstagramPhotoCriteria
      */
     private function processRequest(Request $request)
     {   
-        $criteria = new GoogleEventCriteria();
- 
+        $criteria = new InstagramPhotoCriteria();                                                                                                             
+        
         if ($request->query->has('sorts')) {
             foreach ($request->get('sorts') as $key => $value) {
-                $criteria->orderBy[$key] = $value == '-1' ? 'desc' : 'asc';
-            }
-        }
-
+                $criteria->orderBy[$key] = $value == '-1' ? 'desc' : 'asc';                                                                                 
+            }                                                                                                                                               
+        }                                                                                                                                                   
+        
         if ($request->query->has('queries')) {
-            $queries = $request->query->get('queries');
-            if (array_key_exists('search', $queries)) {
-                $criteria->query = $queries['search'];
-            }
-        }
-
+            $queries = $request->query->get('queries');                                                                                                     
+            
+            if (array_key_exists('search', $queries)) {                                                                                                     
+                $criteria->query = $queries['search'];                                                                                                      
+            }                                                                                                                                               
+            
+        }                                                                                                                                                   
+        
         $criteria->maxResults = $request->query->get('perPage', 10);
         if ($request->query->has('offset')) {
             $criteria->firstResult = $request->query->get('offset');
         }
         
-        return $criteria;
+        return $criteria;                                                                                                                                   
     }
 
 
     /**
-     * @Route("/admin/google-events/activate/{id}", options={"expose"=true})
+     * @Route("/admin/instagram/activate/{id}", options={"expose"=true})
      */
     public function activateAction(Request $request, $id)
     {
         try {
             $em = $this->container->get('em');
-            $googleEventsService = $this->container->get('newscoop_google-events_plugin.google-events_service');
+            $instagramService = $this->container->get('newscoop_instagram_plugin.instagram_service');
             $status = true;
 
-            $event = $em->getRepository('Newscoop\GoogleEventsPluginBundle\Entity\GoogleEvent')
+            $photo = $em->getRepository('Newscoop\InstagramPluginBundle\Entity\InstagramPhoto')
                 ->findOneById($id);
-            $googleEventsService->activateGoogleEvent($event);
+            $instagramService->activateInstagramPhoto($photo);
 
         } catch (\Exception $e) {
             $status = false;
@@ -252,37 +228,18 @@ class AdminController extends Controller
     }
 
     /**
-     * @Route("admin/google-events/deactivate/{id}", options={"expose"=true})
+     * @Route("admin/instagram/deactivate/{id}", options={"expose"=true})
      */
     public function deactivateAction(Request $request, $id)
     {
         try {
             $em = $this->container->get('em');
-            $googleEventsService = $this->container->get('newscoop_google_events_plugin.google_events_service');
+            $instagramService = $this->container->get('newscoop_instagram_plugin.instagram_service');
             $status = true;
 
-            $event = $em->getRepository('Newscoop\GoogleEventsPluginBundle\Entity\GoogleEvent')
+            $photo = $em->getRepository('Newscoop\InstagramPluginBundle\Entity\InstagramPhoto')
                 ->findOneById($id);
-            $googleEventsService->deactivateGoogleEvent($event);
-        } catch (\Exception $e) {
-            $status = false;
-        }
-
-        return new JsonResponse(array(
-            'status' => $status
-        ));
-    }
-
-    /**
-     * @Route("admin/google-events/delete/{id}", options={"expose"=true})
-     */
-    public function deleteAction(Request $request, $id)
-    {
-        try {
-            $em = $this->container->get('em');
-            $googleEventsService = $this->container->get('newscoop_google_events_plugin.google_events_service');
-            $googleEventsService->deleteGoogleEvent($id);
-            $status = true;
+            $instagramService->deactivateInstagramPhoto($photo);
         } catch (\Exception $e) {
             $status = false;
         }
